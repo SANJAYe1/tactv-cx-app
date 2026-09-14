@@ -8,20 +8,60 @@ import 'receipt_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // Connect to your Supabase Project
   await Supabase.initialize(
     url: 'https://xsaownltgudcewjjdjhe.supabase.co',
     anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzYW93bmx0Z3VkY2V3ampkamhlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkyMDI2MzEsImV4cCI6MjEwNDc3ODYzMX0.sfsK9Rqo9NQ2VHqzHxT0jab814Zp2HKpz2jKbfPk6dc',
   );
-
   await DatabaseHelper.instance.initDb();
-  runApp(
-    const MaterialApp(
-      home: DashboardScreen(),
-      debugShowCheckedModeBanner: false,
-    ),
-  );
+  runApp(const MaterialApp(home: AuthScreen(), debugShowCheckedModeBanner: false));
+}
+
+class AuthScreen extends StatefulWidget {
+  const AuthScreen({super.key});
+
+  @override
+  State<AuthScreen> createState() => _AuthScreenState();
+}
+
+class _AuthScreenState extends State<AuthScreen> {
+  final LocalAuthentication auth = LocalAuthentication();
+  bool isAuthenticated = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _authenticate();
+  }
+
+  Future<void> _authenticate() async {
+    try {
+      final authenticated = await auth.authenticate(
+        localizedReason: 'Unlock TACTV Field Manager to access offline data',
+        options: const AuthenticationOptions(stickyAuth: true),
+      );
+      if (authenticated) {
+        setState(() => isAuthenticated = true);
+      }
+    } catch (e) {
+      // Handle missing hardware or disabled security
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (isAuthenticated) {
+      return const DashboardScreen(); // Your existing dashboard UI
+    }
+    return Scaffold(
+      body: Center(
+        child: ElevatedButton.icon(
+          onPressed: _authenticate,
+          icon: const Icon(Icons.lock),
+          label: const Text('Unlock with PIN/Biometrics'),
+        ),
+      ),
+    );
+  }
 }
 
 class DashboardScreen extends StatefulWidget {
@@ -53,15 +93,63 @@ class _DashboardScreenState extends State<DashboardScreen> {
     try {
       await SyncEngine.syncData();
       await _loadLocalCustomers();
-      if (mounted)
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('Sync Complete!')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sync Complete!')));
     } catch (e) {
-      if (mounted)
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.toString())));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
     }
     setState(() => isSyncing = false);
+  }
+
+  // NEW: Dialog to create a customer directly in the app
+  void _showAddCustomerDialog() {
+    final nameController = TextEditingController();
+    final phoneController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Add New Customer'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameController,
+              decoration: const InputDecoration(labelText: 'Customer Name'),
+            ),
+            TextField(
+              controller: phoneController,
+              keyboardType: TextInputType.phone,
+              decoration: const InputDecoration(labelText: 'Phone Number'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              if (nameController.text.isNotEmpty) {
+                final newCustomer = {
+                  'id': const Uuid().v4(),
+                  'name': nameController.text,
+                  'phone': phoneController.text,
+                  'wallet_balance': 0.0,
+                };
+                
+                // Save to local offline database
+                await DatabaseHelper.instance.upsertCustomer(newCustomer);
+                await _loadLocalCustomers(); // Refresh the screen
+                
+                if (mounted) Navigator.pop(context);
+              }
+            },
+            child: const Text('Save'),
+          )
+        ],
+      ),
+    );
   }
 
   void _collectCash(String customerId, String name, String phone) async {
@@ -81,22 +169,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
             onPressed: () async {
               final amount = double.tryParse(amountController.text) ?? 0;
               if (amount > 0) {
-                // 1. Save payment offline immediately
                 await DatabaseHelper.instance.insertPaymentOffline({
-                  'id': Uuid().v4(),
+                  'id': const Uuid().v4(),
                   'customer_id': customerId,
                   'amount': amount,
                   'collected_at': DateTime.now().toIso8601String(),
-                  'sync_status': 'pending',
+                  'sync_status': 'pending'
                 });
-
-                // 2. Open WhatsApp Receipt
+                
                 ReceiptService.sendWhatsAppReceipt(phone, name, amount);
                 if (mounted) Navigator.pop(context);
               }
             },
             child: const Text('Save & Receipt'),
-          ),
+          )
         ],
       ),
     );
@@ -109,26 +195,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
         title: const Text('TACTV Field Manager'),
         actions: [
           IconButton(
-            icon: isSyncing
-                ? const CircularProgressIndicator(color: Colors.white)
-                : const Icon(Icons.sync),
+            icon: isSyncing ? const CircularProgressIndicator(color: Colors.white) : const Icon(Icons.sync),
             onPressed: isSyncing ? null : _runSync,
-          ),
+          )
         ],
       ),
-      body: ListView.builder(
-        itemCount: customers.length,
-        itemBuilder: (context, index) {
-          final c = customers[index];
-          return ListTile(
-            title: Text(c['name']),
-            subtitle: Text(c['phone']),
-            trailing: ElevatedButton(
-              onPressed: () => _collectCash(c['id'], c['name'], c['phone']),
-              child: const Text('Collect'),
+      body: customers.isEmpty 
+          ? const Center(child: Text('No customers yet. Tap + to add one.'))
+          : ListView.builder(
+              itemCount: customers.length,
+              itemBuilder: (context, index) {
+                final c = customers[index];
+                return ListTile(
+                  title: Text(c['name']),
+                  subtitle: Text(c['phone']),
+                  trailing: ElevatedButton(
+                    onPressed: () => _collectCash(c['id'], c['name'], c['phone']),
+                    child: const Text('Collect'),
+                  ),
+                );
+              },
             ),
-          );
-        },
+      // NEW: Floating action button to trigger the dialog
+      floatingActionButton: FloatingActionButton(
+        onPressed: _showAddCustomerDialog,
+        child: const Icon(Icons.add),
       ),
     );
   }
