@@ -26,7 +26,7 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       // Check if user is already logged into Supabase
       home: Supabase.instance.client.auth.currentSession == null
-          ? const CloudLoginScreen()
+          ? const AreaDashboardScreen()
           : const AreaDashboardScreen(),
     );
   }
