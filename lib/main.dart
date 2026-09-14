@@ -12,8 +12,23 @@ Future<void> main() async {
     url: 'https://xsaownltgudcewjjdjhe.supabase.co',
     anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzYW93bmx0Z3VkY2V3ampkamhlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkyMDI2MzEsImV4cCI6MjEwNDc3ODYzMX0.sfsK9Rqo9NQ2VHqzHxT0jab814Zp2HKpz2jKbfPk6dc',
   );
-  await DatabaseHelper.instance.initDb();
-  runApp(const MaterialApp(home: AuthScreen(), debugShowCheckedModeBanner: false));
+  // await DatabaseHelper.instance.initDb();
+  runApp(const MyApp());
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      // Check if user is already logged into Supabase
+      home: Supabase.instance.client.auth.currentSession == null
+          ? const CloudLoginScreen()
+          : const BiometricLockScreen(),
+    );
+  }
 }
 
 class AuthScreen extends StatefulWidget {
@@ -67,6 +82,14 @@ class _AuthScreenState extends State<AuthScreen> {
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Dashboard')),
+      body: const Center(child: Text('Offline Data Loaded Successfully')),
+    );
+  }
+  
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
@@ -220,6 +243,125 @@ class _DashboardScreenState extends State<DashboardScreen> {
       floatingActionButton: FloatingActionButton(
         onPressed: _showAddCustomerDialog,
         child: const Icon(Icons.add),
+      ),
+    );
+  }
+}
+
+class CloudLoginScreen extends StatefulWidget {
+  const CloudLoginScreen({super.key});
+
+  @override
+  State<CloudLoginScreen> createState() => _CloudLoginScreenState();
+}
+
+class _CloudLoginScreenState extends State<CloudLoginScreen> {
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  bool _isLoading = false;
+
+  Future<void> _login() async {
+    setState(() => _isLoading = true);
+    try {
+      await Supabase.instance.client.auth.signInWithPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
+      );
+      
+      // On success, trigger the initial first-time sync here
+      // await SyncEngine.syncData(); 
+
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const BiometricLockScreen()),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+      }
+    }
+    setState(() => _isLoading = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Operator Login')),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            TextField(
+              controller: _emailController,
+              decoration: const InputDecoration(labelText: 'Operator Email'),
+              keyboardType: TextInputType.emailAddress,
+            ),
+            TextField(
+              controller: _passwordController,
+              decoration: const InputDecoration(labelText: 'Password'),
+              obscureText: true,
+            ),
+            const SizedBox(height: 20),
+            _isLoading
+                ? const CircularProgressIndicator()
+                : ElevatedButton(
+                    onPressed: _login,
+                    child: const Text('Login & Sync Initial Data'),
+                  ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// --- 2. DAILY OFFLINE BIOMETRIC UNLOCK ---
+class BiometricLockScreen extends StatefulWidget {
+  const BiometricLockScreen({super.key});
+
+  @override
+  State<BiometricLockScreen> createState() => _BiometricLockScreenState();
+}
+
+class _BiometricLockScreenState extends State<BiometricLockScreen> {
+  final LocalAuthentication auth = LocalAuthentication();
+  bool isAuthenticated = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _authenticate();
+  }
+
+  Future<void> _authenticate() async {
+    try {
+      final authenticated = await auth.authenticate(
+        localizedReason: 'Unlock TACTV Field Manager',
+        options: const AuthenticationOptions(stickyAuth: true),
+      );
+      if (authenticated && mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const DashboardScreen()),
+        );
+      }
+    } catch (e) {
+      // Handle missing hardware
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: ElevatedButton.icon(
+          onPressed: _authenticate,
+          icon: const Icon(Icons.fingerprint),
+          label: const Text('Tap to Unlock'),
+        ),
       ),
     );
   }
