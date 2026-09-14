@@ -26,7 +26,7 @@ class SyncEngine {
         await dbHelper.markPaymentAsSynced(localPayment['id']);
       }
     } catch (e) {
-      throw Exception('Sync failed. Check internet connection.');
+      throw Exception('Sync failed. Check internet connection.: $e');
     }
   }
 }
