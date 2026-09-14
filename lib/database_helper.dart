@@ -77,26 +77,6 @@ class DatabaseHelper {
     );
   }
 
-  Future<void> markAsSynced(String table, String id) async {
-    final db = await database;
-    await db.update(
-      table,
-      {'sync_status': 'synced'},
-      where: 'id = ?',
-      whereArgs: [id],
-    );
-  }
-
-  Future<void> upsertCloudData(
-    String table,
-    Map<String, dynamic> data,
-    String idColumn,
-  ) async {
-    final db = await database;
-    data['sync_status'] = 'synced'; // Data from cloud is already synced
-    await db.insert(table, data, conflictAlgorithm: ConflictAlgorithm.replace);
-  }
-
   Future<List<Map<String, dynamic>>> getLocalCustomers() async {
     final db = await database;
     return await db.query('customers');
@@ -150,5 +130,19 @@ class DatabaseHelper {
       LEFT JOIN packages p ON s.package_id = p.id
       WHERE s.customer_id = ?
     ''', [customerId]);
+  }
+
+  Future<void> markAsSynced(String table, String idColumn, String idValue) async {
+    final db = await database;
+    await db.update(table, {'sync_status': 'synced'}, where: '$idColumn = ?', whereArgs: [idValue]);
+  }
+
+  Future<void> upsertCloudData(String table, Map<String, dynamic> data, String idColumn) async {
+    final db = await database;
+    data['sync_status'] = 'synced'; // Data from cloud is already synced
+    // Remove updated_at if SQLite table doesn't have it (areas, packages, stbs, payments don't in our current local schema)
+    if (table != 'customers') data.remove('updated_at'); 
+    
+    await db.insert(table, data, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 }

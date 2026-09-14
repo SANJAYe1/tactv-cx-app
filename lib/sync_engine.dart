@@ -8,36 +8,51 @@ class SyncEngine {
     final db = DatabaseHelper.instance;
     final prefs = await SharedPreferences.getInstance();
     
-    // 1. Get Watermark Timestamp
     String lastSync = prefs.getString('last_synced_at') ?? '1970-01-01T00:00:00.000Z';
     String currentSyncStart = DateTime.now().toIso8601String();
 
     try {
-      // 2. PUSH Pending Local Data to Cloud
-      final tablesToPush = ['customers', 'payments', 'service_tickets'];
+      // 1. PUSH Pending Local Data to Cloud
+      final pushTables = {'customers': 'id', 'stbs': 'box_id', 'payments': 'id'};
       
-      for (String table in tablesToPush) {
+      for (var entry in pushTables.entries) {
+        String table = entry.key;
+        String pkCol = entry.value;
         final pendingRecords = await db.getUnsynced(table);
+        
         for (var record in pendingRecords) {
           var cloudPayload = Map<String, dynamic>.from(record);
           cloudPayload.remove('sync_status'); 
           
           await supabase.from(table).upsert(cloudPayload);
-          await db.markAsSynced(table, record['id']);
+          await db.markAsSynced(table, pkCol, record[pkCol].toString());
         }
       }
 
-      // 3. PULL Updated Data from Cloud (Watermark logic)
-      final updatedCustomers = await supabase
-          .from('customers')
-          .select()
-          .gt('updated_at', lastSync);
-          
-      for (var c in updatedCustomers) {
-        await db.upsertCloudData('customers', c, 'id');
+      // 2. PULL Updated Data from Cloud (Watermark logic)
+      final pullTables = {
+        'areas': 'id',
+        'packages': 'id',
+        'customers': 'id',
+        'stbs': 'box_id',
+        'payments': 'id'
+      };
+
+      for (var entry in pullTables.entries) {
+        String table = entry.key;
+        String pkCol = entry.value;
+        
+        final updatedCloudData = await supabase
+            .from(table)
+            .select()
+            .gt('updated_at', lastSync);
+            
+        for (var row in updatedCloudData) {
+          await db.upsertCloudData(table, row, pkCol);
+        }
       }
 
-      // 4. Update Watermark on Success
+      // 3. Update Watermark on Success
       await prefs.setString('last_synced_at', currentSyncStart);
 
     } catch (e) {
