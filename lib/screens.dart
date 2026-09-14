@@ -113,9 +113,14 @@ class _AreaDashboardScreenState extends State<AreaDashboardScreen> {
             subtitle: Text('${area['customer_count'] ?? 0} Active Customers'),
             trailing: const Icon(Icons.chevron_right),
             onTap: () {
-              // We will build CustomerListScreen next once this screen proves successful
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Opening ${area['name']}...'))
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => CustomerListScreen(
+                    areaId: area['id'].toString(),
+                    areaName: area['name'].toString(),
+                  ),
+                ),
               );
             },
           ),

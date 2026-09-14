@@ -6,6 +6,7 @@ import 'package:local_auth/local_auth.dart';
 import 'database_helper.dart';
 import 'sync_engine.dart';
 import 'receipt_service.dart';
+import 'screens.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
