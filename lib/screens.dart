@@ -3,6 +3,8 @@ import 'database_helper.dart';
 import 'sync_engine.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+final GlobalKey<ScaffoldState> rootScaffoldKey = GlobalKey<ScaffoldState>();
+
 class MainLayout extends StatefulWidget {
   const MainLayout({super.key});
 
@@ -32,6 +34,7 @@ class _MainLayoutState extends State<MainLayout> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      key: rootScaffoldKey, // <-- ADD THIS LINE
       body: IndexedStack(
         index: _selectedIndex,
         children: _screens,
@@ -154,6 +157,10 @@ class _AreaDashboardScreenState extends State<AreaDashboardScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Operating Areas'),
+        leading: IconButton(
+          icon: const Icon(Icons.menu),
+          onPressed: () => rootScaffoldKey.currentState?.openDrawer(),
+        ),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 16.0),
@@ -235,7 +242,11 @@ class DashboardStatsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('System Overview')),
+      appBar: AppBar(title: const Text('System Overview'),
+       leading: IconButton(
+          icon: const Icon(Icons.menu),
+          onPressed: () => rootScaffoldKey.currentState?.openDrawer(),
+        ),),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -319,7 +330,10 @@ class _ProfileSecurityScreenState extends State<ProfileSecurityScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Profile & Security')),
+      appBar: AppBar(title: const Text('Profile & Security'), leading: IconButton(
+          icon: const Icon(Icons.menu),
+          onPressed: () => rootScaffoldKey.currentState?.openDrawer(),
+        ),),
       body: ListView(
         children: [
           const ListTile(
