@@ -13,59 +13,68 @@ class DatabaseHelper {
     return _database!;
   }
 
-  Future<Database> initDb() async {
-    final dbPath = await getDatabasesPath();
-    final path = join(dbPath, 'tactv_offline.db');
+Future<Database> initDb() async {
+  final dbPath = await getDatabasesPath();
+  final path = join(dbPath, 'tactv_offline.db');
 
-    return await openDatabase(
-      path,
-      version: 2,
-      onCreate: (db, version) async {
-        await db.execute('''
-          CREATE TABLE customers (
-            id TEXT PRIMARY KEY,
-            name TEXT,
-            phone TEXT,
-            package_tier TEXT, 
-            installation_fee REAL,
-            stb_mac_address TEXT,
-            wallet_balance REAL,
-            sync_status TEXT DEFAULT 'pending',
-            updated_at TEXT
-          )
-        ''');
+  return await openDatabase(
+    path,
+    version: 1,
+    onCreate: (db, version) async {
+      await db.execute('''
+        CREATE TABLE areas (
+          id TEXT PRIMARY KEY,
+          name TEXT,
+          pincode TEXT,
+          sync_status TEXT DEFAULT 'synced'
+        )
+      ''');
 
-        await db.execute('''
-          CREATE TABLE payments (
-            id TEXT PRIMARY KEY,
-            customer_id TEXT,
-            amount REAL,
-            collected_at TEXT,
-            sync_status TEXT DEFAULT 'pending'
-          )
-        ''');
+      await db.execute('''
+        CREATE TABLE packages (
+          id TEXT PRIMARY KEY,
+          name TEXT,
+          monthly_price REAL,
+          sync_status TEXT DEFAULT 'synced'
+        )
+      ''');
 
-        await db.execute('''
-          CREATE TABLE stb_inventory (
-            mac_address TEXT PRIMARY KEY,
-            status TEXT, 
-            assigned_to TEXT
-          )
-        ''');
+      await db.execute('''
+        CREATE TABLE customers (
+          id TEXT PRIMARY KEY,
+          area_id TEXT,
+          name TEXT,
+          phone TEXT,
+          wallet_balance REAL DEFAULT 0.0,
+          sync_status TEXT DEFAULT 'pending',
+          updated_at TEXT
+        )
+      ''');
 
-        await db.execute('''
-          CREATE TABLE service_tickets (
-            id TEXT PRIMARY KEY,
-            customer_id TEXT,
-            issue_type TEXT,
-            status TEXT DEFAULT 'open',
-            created_at TEXT,
-            sync_status TEXT DEFAULT 'pending'
-          )
-        ''');
-      },
-    );
-  }
+      await db.execute('''
+        CREATE TABLE stbs (
+          box_id TEXT PRIMARY KEY,
+          customer_id TEXT,
+          package_id TEXT,
+          status TEXT DEFAULT 'active',
+          installation_date TEXT,
+          sync_status TEXT DEFAULT 'pending'
+        )
+      ''');
+
+      await db.execute('''
+        CREATE TABLE payments (
+          id TEXT PRIMARY KEY,
+          customer_id TEXT,
+          amount REAL,
+          collection_type TEXT,
+          collected_at TEXT,
+          sync_status TEXT DEFAULT 'pending'
+        )
+      ''');
+    },
+  );
+}
 
   // Generic methods for two-way sync
   Future<List<Map<String, dynamic>>> getUnsynced(String table) async {
