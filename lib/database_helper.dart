@@ -34,7 +34,7 @@ class DatabaseHelper {
             updated_at TEXT
           )
         ''');
-        
+
         await db.execute('''
           CREATE TABLE payments (
             id TEXT PRIMARY KEY,
@@ -70,17 +70,49 @@ class DatabaseHelper {
   // Generic methods for two-way sync
   Future<List<Map<String, dynamic>>> getUnsynced(String table) async {
     final db = await database;
-    return await db.query(table, where: 'sync_status = ?', whereArgs: ['pending']);
+    return await db.query(
+      table,
+      where: 'sync_status = ?',
+      whereArgs: ['pending'],
+    );
   }
 
   Future<void> markAsSynced(String table, String id) async {
     final db = await database;
-    await db.update(table, {'sync_status': 'synced'}, where: 'id = ?', whereArgs: [id]);
+    await db.update(
+      table,
+      {'sync_status': 'synced'},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
   }
 
-  Future<void> upsertCloudData(String table, Map<String, dynamic> data, String idColumn) async {
+  Future<void> upsertCloudData(
+    String table,
+    Map<String, dynamic> data,
+    String idColumn,
+  ) async {
     final db = await database;
     data['sync_status'] = 'synced'; // Data from cloud is already synced
     await db.insert(table, data, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<List<Map<String, dynamic>>> getLocalCustomers() async {
+    final db = await database;
+    return await db.query('customers');
+  }
+
+  Future<void> upsertCustomer(Map<String, dynamic> customer) async {
+    final db = await database;
+    await db.insert(
+      'customers',
+      customer,
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<void> insertPaymentOffline(Map<String, dynamic> payment) async {
+    final db = await database;
+    await db.insert('payments', payment);
   }
 }

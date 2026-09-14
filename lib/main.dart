@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
+import 'package:local_auth/local_auth.dart';
 
 import 'database_helper.dart';
 import 'sync_engine.dart';
@@ -10,7 +11,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Supabase.initialize(
     url: 'https://xsaownltgudcewjjdjhe.supabase.co',
-    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzYW93bmx0Z3VkY2V3ampkamhlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkyMDI2MzEsImV4cCI6MjEwNDc3ODYzMX0.sfsK9Rqo9NQ2VHqzHxT0jab814Zp2HKpz2jKbfPk6dc',
+    publishableKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzYW93bmx0Z3VkY2V3ampkamhlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkyMDI2MzEsImV4cCI6MjEwNDc3ODYzMX0.sfsK9Rqo9NQ2VHqzHxT0jab814Zp2HKpz2jKbfPk6dc',
   );
   // await DatabaseHelper.instance.initDb();
   runApp(const MyApp());
@@ -26,7 +27,7 @@ class MyApp extends StatelessWidget {
       // Check if user is already logged into Supabase
       home: Supabase.instance.client.auth.currentSession == null
           ? const CloudLoginScreen()
-          : const BiometricLockScreen(),
+          : const DashboardScreen(),
     );
   }
 }
@@ -52,7 +53,7 @@ class _AuthScreenState extends State<AuthScreen> {
     try {
       final authenticated = await auth.authenticate(
         localizedReason: 'Unlock TACTV Field Manager to access offline data',
-        options: const AuthenticationOptions(stickyAuth: true),
+        persistAcrossBackgrounding: true,
       );
       if (authenticated) {
         setState(() => isAuthenticated = true);
@@ -83,14 +84,6 @@ class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Dashboard')),
-      body: const Center(child: Text('Offline Data Loaded Successfully')),
-    );
-  }
-  
-  @override
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
@@ -116,9 +109,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
     try {
       await SyncEngine.syncData();
       await _loadLocalCustomers();
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sync Complete!')));
+      if (mounted) {
+        Navigator.pop(context);
+      }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+      if (!mounted) return;
+      Navigator.pop(context);
     }
     setState(() => isSyncing = false);
   }
@@ -160,16 +156,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   'phone': phoneController.text,
                   'wallet_balance': 0.0,
                 };
-                
+
                 // Save to local offline database
                 await DatabaseHelper.instance.upsertCustomer(newCustomer);
                 await _loadLocalCustomers(); // Refresh the screen
-                
-                if (mounted) Navigator.pop(context);
+
+                if (context.mounted) Navigator.pop(context);
               }
             },
             child: const Text('Save'),
-          )
+          ),
         ],
       ),
     );
@@ -197,15 +193,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   'customer_id': customerId,
                   'amount': amount,
                   'collected_at': DateTime.now().toIso8601String(),
-                  'sync_status': 'pending'
+                  'sync_status': 'pending',
                 });
-                
+
                 ReceiptService.sendWhatsAppReceipt(phone, name, amount);
-                if (mounted) Navigator.pop(context);
+                if (context.mounted) Navigator.pop(context);
               }
             },
             child: const Text('Save & Receipt'),
-          )
+          ),
         ],
       ),
     );
@@ -218,22 +214,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
         title: const Text('TACTV Field Manager'),
         actions: [
           IconButton(
-            icon: isSyncing ? const CircularProgressIndicator(color: Colors.white) : const Icon(Icons.sync),
+            icon: isSyncing
+                ? const CircularProgressIndicator(color: Colors.white)
+                : const Icon(Icons.sync),
             onPressed: isSyncing ? null : _runSync,
-          )
+          ),
         ],
       ),
-      body: customers.isEmpty 
+      body: customers.isEmpty
           ? const Center(child: Text('No customers yet. Tap + to add one.'))
           : ListView.builder(
               itemCount: customers.length,
               itemBuilder: (context, index) {
                 final c = customers[index];
                 return ListTile(
-                  title: Text(c['name']),
-                  subtitle: Text(c['phone']),
+                  title: Text(c['name'] ?? 'Unnamed'),
+                  subtitle: Text(c['phone'] ?? 'No phone'),
                   trailing: ElevatedButton(
-                    onPressed: () => _collectCash(c['id'], c['name'], c['phone']),
+                    onPressed: () => _collectCash(
+                      c['id'].toString(),
+                      c['name']?.toString() ?? 'Unnamed',
+                      c['phone']?.toString() ?? 'No phone',
+                    ),
                     child: const Text('Collect'),
                   ),
                 );
@@ -267,19 +269,21 @@ class _CloudLoginScreenState extends State<CloudLoginScreen> {
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
-      
+
       // On success, trigger the initial first-time sync here
-      // await SyncEngine.syncData(); 
+      // await SyncEngine.syncData();
 
       if (mounted) {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => const BiometricLockScreen()),
+          // MaterialPageRoute(builder: (context) => const BiometricLockScreen()),
+          MaterialPageRoute(builder: (context) => const DashboardScreen()),
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(e.toString())));
       }
     }
     setState(() => _isLoading = false);
@@ -340,7 +344,7 @@ class _BiometricLockScreenState extends State<BiometricLockScreen> {
     try {
       final authenticated = await auth.authenticate(
         localizedReason: 'Unlock TACTV Field Manager',
-        options: const AuthenticationOptions(stickyAuth: true),
+        persistAcrossBackgrounding: true,
       );
       if (authenticated && mounted) {
         Navigator.pushReplacement(
