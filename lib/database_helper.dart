@@ -187,4 +187,25 @@ Future<Database> initDb() async {
       ORDER BY p.collected_at DESC
     ''');
   }
+
+  // --- CRUD Operations ---
+  Future<void> upsertPackage(Map<String, dynamic> package) async {
+    final db = await database;
+    // Set status to pending so the SyncEngine knows to upload it
+    package['sync_status'] = 'pending'; 
+    await db.insert('packages', package, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  // --- Search & Filter Queries ---
+  Future<List<Map<String, dynamic>>> searchCustomers(String query, int limit, int offset) async {
+    final db = await database;
+    return await db.rawQuery('''
+      SELECT c.*, a.name as area_name
+      FROM customers c
+      LEFT JOIN areas a ON c.area_id = a.id
+      WHERE c.name LIKE ? OR c.phone LIKE ?
+      ORDER BY c.name ASC
+      LIMIT ? OFFSET ?
+    ''', ['%$query%', '%$query%', limit, offset]);
+  }
 }

@@ -399,7 +399,13 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Customers: ${widget.areaName}')),
+      appBar: AppBar(title: Text('Customers: ${widget.areaName}'),actions: [
+          IconButton(
+            icon: const Icon(Icons.home),
+            onPressed: () => Navigator.of(context).popUntil((route) => route.isFirst), // Instantly returns to Dashboard
+          )
+        ],),
+      
       body: ListView.builder(
         itemCount: customers.length,
         itemBuilder: (context, index) {
@@ -457,7 +463,12 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(widget.customer['name'].toString())),
+      appBar: AppBar(title: Text(widget.customer['name'].toString()), actions: [
+          IconButton(
+            icon: const Icon(Icons.home),
+            onPressed: () => Navigator.of(context).popUntil((route) => route.isFirst), // Instantly returns to Dashboard
+          )
+        ],),
       body: Column(
         children: [
           Padding(
@@ -648,6 +659,199 @@ class _PaymentLedgerScreenState extends State<PaymentLedgerScreen> {
                   trailing: Text('+ Rs. ${p['amount']}', style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 16)),
                 );
               },
+            ),
+    );
+  }
+}
+
+// --- MODULE: Package & Pricing Management ---
+class PackageManagementScreen extends StatefulWidget {
+  const PackageManagementScreen({super.key});
+
+  @override
+  State<PackageManagementScreen> createState() => _PackageManagementScreenState();
+}
+
+class _PackageManagementScreenState extends State<PackageManagementScreen> {
+  List<Map<String, dynamic>> packages = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPackages();
+  }
+
+  Future<void> _loadPackages() async {
+    final db = await DatabaseHelper.instance.database;
+    final data = await db.query('packages', orderBy: 'name ASC');
+    if (mounted) setState(() => packages = data);
+  }
+
+  void _showPackageDialog([Map<String, dynamic>? existingPackage]) {
+    final isEditing = existingPackage != null;
+    final nameController = TextEditingController(text: existingPackage?['name']?.toString() ?? '');
+    final priceController = TextEditingController(text: existingPackage?['monthly_price']?.toString() ?? '');
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(isEditing ? 'Edit Package' : 'New Package'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Package Name')),
+            TextField(
+              controller: priceController, 
+              decoration: const InputDecoration(labelText: 'Base Price (Rs.)'), 
+              keyboardType: TextInputType.number,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () async {
+              final payload = {
+                'id': isEditing ? existingPackage['id'] : const Uuid().v4(),
+                'name': nameController.text,
+                'monthly_price': double.tryParse(priceController.text) ?? 0.0,
+              };
+              await DatabaseHelper.instance.upsertPackage(payload);
+              if (mounted) Navigator.pop(context);
+              _loadPackages();
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Pricing & Packages'),
+        leading: IconButton(
+          icon: const Icon(Icons.menu),
+          onPressed: () => rootScaffoldKey.currentState?.openDrawer(),
+        ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => _showPackageDialog(),
+        child: const Icon(Icons.add),
+      ),
+      body: ListView.builder(
+        itemCount: packages.length,
+        itemBuilder: (context, index) {
+          final pack = packages[index];
+          return ListTile(
+            leading: const Icon(Icons.tv, color: Colors.blue),
+            title: Text(pack['name'].toString(), style: const TextStyle(fontWeight: FontWeight.bold)),
+            subtitle: Text('Base Price: Rs. ${pack['monthly_price']}'),
+            trailing: const Icon(Icons.edit, size: 20),
+            onTap: () => _showPackageDialog(pack), // Trigger edit on tap
+          );
+        },
+      ),
+    );
+  }
+}
+
+// --- MODULE: Global Customer List (With Search & Add) ---
+class GlobalCustomerListScreen extends StatefulWidget {
+  const GlobalCustomerListScreen({super.key});
+
+  @override
+  State<GlobalCustomerListScreen> createState() => _GlobalCustomerListScreenState();
+}
+
+class _GlobalCustomerListScreenState extends State<GlobalCustomerListScreen> {
+  List<Map<String, dynamic>> customers = [];
+  String searchQuery = '';
+  int currentPage = 0;
+  final int itemsPerPage = 20;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData({bool reset = false}) async {
+    if (reset) currentPage = 0;
+    
+    // Uses the new search query method with limits for pagination
+    final data = await DatabaseHelper.instance.searchCustomers(
+      searchQuery, 
+      itemsPerPage, 
+      currentPage * itemsPerPage
+    );
+    
+    if (mounted) {
+      setState(() {
+        if (reset) {
+          customers = data;
+        } else {
+          customers.addAll(data); // Append for pagination
+        }
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.menu),
+          onPressed: () => rootScaffoldKey.currentState?.openDrawer(),
+        ),
+        // Embedded Search Bar
+        title: TextField(
+          style: const TextStyle(color: Colors.white),
+          decoration: const InputDecoration(
+            hintText: 'Search by name or phone...',
+            hintStyle: TextStyle(color: Colors.white70),
+            border: InputBorder.none,
+            icon: Icon(Icons.search, color: Colors.white),
+          ),
+          onChanged: (value) {
+            searchQuery = value;
+            _loadData(reset: true); // Re-query DB dynamically as user types
+          },
+        ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          // Open Customer Creation Form
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Customer form opening...')));
+        },
+        child: const Icon(Icons.person_add),
+      ),
+      body: customers.isEmpty
+          ? const Center(child: Text('No customers found.'))
+          : NotificationListener<ScrollEndNotification>(
+              onNotification: (scrollInfo) {
+                // Trigger pagination load when hitting the bottom of the list
+                if (scrollInfo.metrics.pixels == scrollInfo.metrics.maxScrollExtent) {
+                  currentPage++;
+                  _loadData();
+                }
+                return true;
+              },
+              child: ListView.builder(
+                itemCount: customers.length,
+                itemBuilder: (context, index) {
+                  final c = customers[index];
+                  return ListTile(
+                    leading: const CircleAvatar(child: Icon(Icons.person)),
+                    title: Text(c['name']?.toString() ?? 'Unknown'),
+                    subtitle: Text('${c['phone']} • ${c['area_name'] ?? 'No Area'}'),
+                    trailing: Text('Bal: Rs. ${c['wallet_balance'] ?? 0}'),
+                  );
+                },
+              ),
             ),
     );
   }
