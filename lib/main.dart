@@ -12,7 +12,7 @@ Future<void> main() async {
   // Connect to your Supabase Project
   await Supabase.initialize(
     url: 'https://xsaownltgudcewjjdjhe.supabase.co',
-    anonKey: 'PASTE_YOUR_ANON_PUBLIC_KEY_HERE',
+    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzYW93bmx0Z3VkY2V3ampkamhlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkyMDI2MzEsImV4cCI6MjEwNDc3ODYzMX0.sfsK9Rqo9NQ2VHqzHxT0jab814Zp2HKpz2jKbfPk6dc',
   );
 
   await DatabaseHelper.instance.initDb();
