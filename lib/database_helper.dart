@@ -154,4 +154,37 @@ Future<Database> initDb() async {
     
     await db.insert(table, data, conflictAlgorithm: ConflictAlgorithm.replace);
   }
+
+  // --- Global Ledger Queries ---
+
+  Future<List<Map<String, dynamic>>> getAllCustomers() async {
+    final db = await database;
+    return await db.rawQuery('''
+      SELECT c.*, a.name as area_name
+      FROM customers c
+      LEFT JOIN areas a ON c.area_id = a.id
+      ORDER BY c.name ASC
+    ''');
+  }
+
+  Future<List<Map<String, dynamic>>> getAllSTBs() async {
+    final db = await database;
+    return await db.rawQuery('''
+      SELECT s.*, c.name as customer_name, p.name as package_name
+      FROM stbs s
+      LEFT JOIN customers c ON s.customer_id = c.id
+      LEFT JOIN packages p ON s.package_id = p.id
+      ORDER BY s.box_id ASC
+    ''');
+  }
+
+  Future<List<Map<String, dynamic>>> getAllPayments() async {
+    final db = await database;
+    return await db.rawQuery('''
+      SELECT p.*, c.name as customer_name
+      FROM payments p
+      LEFT JOIN customers c ON p.customer_id = c.id
+      ORDER BY p.collected_at DESC
+    ''');
+  }
 }

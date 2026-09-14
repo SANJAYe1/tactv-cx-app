@@ -17,13 +17,13 @@ class _MainLayoutState extends State<MainLayout> {
 
   // The operational modules assigned to the sidebar
   final List<Widget> _screens = [
-    const DashboardStatsScreen(),     // 0: Landing
-    const AreaDashboardScreen(),      // 1: Areas (Already built)
-    const Center(child: Text('Global Users List Coming Soon')), // 2: Users
-    const Center(child: Text('Hardware Inventory Coming Soon')), // 3: STBs
-    const Center(child: Text('Payment Ledger Coming Soon')),     // 4: Payments
-    const ProfileSecurityScreen(),    // 5: Profile & Security
-    const Center(child: Text('About TACTV Field App v1.0.0')),   // 6: About
+    const DashboardStatsScreen(),       // 0: Landing
+    const AreaDashboardScreen(),        // 1: Areas 
+    const GlobalCustomerListScreen(),   // 2: Users (Replaced)
+    const StbInventoryScreen(),         // 3: STBs (Replaced)
+    const PaymentLedgerScreen(),        // 4: Payments (Replaced)
+    const ProfileSecurityScreen(),      // 5: Profile & Security
+    const Center(child: Text('About TACTV Field App v1.0.0')), // 6: About
   ];
 
   void _onItemTapped(int index) {
@@ -494,6 +494,161 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
           )
         ],
       ),
+    );
+  }
+}
+
+// --- MODULE: Global Customer List ---
+class GlobalCustomerListScreen extends StatefulWidget {
+  const GlobalCustomerListScreen({super.key});
+
+  @override
+  State<GlobalCustomerListScreen> createState() => _GlobalCustomerListScreenState();
+}
+
+class _GlobalCustomerListScreenState extends State<GlobalCustomerListScreen> {
+  List<Map<String, dynamic>> customers = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    final data = await DatabaseHelper.instance.getAllCustomers();
+    if (mounted) setState(() => customers = data);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('All Customers'),
+        leading: IconButton(
+          icon: const Icon(Icons.menu),
+          onPressed: () => rootScaffoldKey.currentState?.openDrawer(),
+        ),
+      ),
+      body: customers.isEmpty
+          ? const Center(child: Text('No customers found in database.'))
+          : ListView.builder(
+              itemCount: customers.length,
+              itemBuilder: (context, index) {
+                final c = customers[index];
+                return ListTile(
+                  leading: const CircleAvatar(child: Icon(Icons.person)),
+                  title: Text(c['name']?.toString() ?? 'Unknown'),
+                  subtitle: Text('${c['phone']} • ${c['area_name'] ?? 'No Area'}'),
+                  trailing: Text('Bal: Rs. ${c['wallet_balance'] ?? 0}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                );
+              },
+            ),
+    );
+  }
+}
+
+// --- MODULE: STB Inventory ---
+class StbInventoryScreen extends StatefulWidget {
+  const StbInventoryScreen({super.key});
+
+  @override
+  State<StbInventoryScreen> createState() => _StbInventoryScreenState();
+}
+
+class _StbInventoryScreenState extends State<StbInventoryScreen> {
+  List<Map<String, dynamic>> stbs = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    final data = await DatabaseHelper.instance.getAllSTBs();
+    if (mounted) setState(() => stbs = data);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('STB Inventory'),
+        leading: IconButton(
+          icon: const Icon(Icons.menu),
+          onPressed: () => rootScaffoldKey.currentState?.openDrawer(),
+        ),
+      ),
+      body: stbs.isEmpty
+          ? const Center(child: Text('No STBs found.'))
+          : ListView.builder(
+              itemCount: stbs.length,
+              itemBuilder: (context, index) {
+                final box = stbs[index];
+                final bool isActive = box['status'] == 'active';
+                return Card(
+                  margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  child: ListTile(
+                    leading: Icon(Icons.router, color: isActive ? Colors.green : Colors.red),
+                    title: Text(box['box_id'].toString(), style: const TextStyle(fontWeight: FontWeight.bold)),
+                    subtitle: Text('Assigned: ${box['customer_name'] ?? 'Unassigned'}\nPack: ${box['package_name'] ?? 'None'}'),
+                    isThreeLine: true,
+                    trailing: Chip(label: Text(box['status'].toString().toUpperCase())),
+                  ),
+                );
+              },
+            ),
+    );
+  }
+}
+
+// --- MODULE: Payment Ledger ---
+class PaymentLedgerScreen extends StatefulWidget {
+  const PaymentLedgerScreen({super.key});
+
+  @override
+  State<PaymentLedgerScreen> createState() => _PaymentLedgerScreenState();
+}
+
+class _PaymentLedgerScreenState extends State<PaymentLedgerScreen> {
+  List<Map<String, dynamic>> payments = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    final data = await DatabaseHelper.instance.getAllPayments();
+    if (mounted) setState(() => payments = data);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Payment History'),
+        leading: IconButton(
+          icon: const Icon(Icons.menu),
+          onPressed: () => rootScaffoldKey.currentState?.openDrawer(),
+        ),
+      ),
+      body: payments.isEmpty
+          ? const Center(child: Text('No payment history found.'))
+          : ListView.builder(
+              itemCount: payments.length,
+              itemBuilder: (context, index) {
+                final p = payments[index];
+                return ListTile(
+                  leading: const CircleAvatar(backgroundColor: Colors.green, child: Icon(Icons.currency_rupee, color: Colors.white)),
+                  title: Text(p['customer_name']?.toString() ?? 'Unknown Customer'),
+                  subtitle: Text(p['collected_at']?.toString().split('T').first ?? 'Unknown Date'),
+                  trailing: Text('+ Rs. ${p['amount']}', style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 16)),
+                );
+              },
+            ),
     );
   }
 }
