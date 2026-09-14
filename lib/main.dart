@@ -27,7 +27,7 @@ class MyApp extends StatelessWidget {
       // Check if user is already logged into Supabase
       home: Supabase.instance.client.auth.currentSession == null
           ? const CloudLoginScreen()
-          : const DashboardScreen(),
+          : const AreaDashboardScreen(),
     );
   }
 }
@@ -277,7 +277,7 @@ class _CloudLoginScreenState extends State<CloudLoginScreen> {
         Navigator.pushReplacement(
           context,
           // MaterialPageRoute(builder: (context) => const BiometricLockScreen()),
-          MaterialPageRoute(builder: (context) => const DashboardScreen()),
+          MaterialPageRoute(builder: (context) => const AreaDashboardScreen()),
         );
       }
     } catch (e) {

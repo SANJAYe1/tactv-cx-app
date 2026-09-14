@@ -115,4 +115,40 @@ class DatabaseHelper {
     final db = await database;
     await db.insert('payments', payment);
   }
+
+  // --- Relational Queries ---
+
+  Future<List<Map<String, dynamic>>> getAreas() async {
+    final db = await database;
+    // Get areas with a count of active customers in each
+    return await db.rawQuery('''
+      SELECT a.id, a.name, a.pincode, COUNT(c.id) as customer_count
+      FROM areas a
+      LEFT JOIN customers c ON a.id = c.area_id
+      GROUP BY a.id
+    ''');
+  }
+
+  Future<List<Map<String, dynamic>>> getCustomersByArea(String areaId) async {
+    final db = await database;
+    // Get customers and calculate their dynamically aggregated monthly due
+    return await db.rawQuery('''
+      SELECT c.*, IFNULL(SUM(p.monthly_price), 0) as total_monthly_due
+      FROM customers c
+      LEFT JOIN stbs s ON c.id = s.customer_id AND s.status = 'active'
+      LEFT JOIN packages p ON s.package_id = p.id
+      WHERE c.area_id = ?
+      GROUP BY c.id
+    ''', [areaId]);
+  }
+
+  Future<List<Map<String, dynamic>>> getCustomerSTBs(String customerId) async {
+    final db = await database;
+    return await db.rawQuery('''
+      SELECT s.*, p.name as package_name, p.monthly_price
+      FROM stbs s
+      LEFT JOIN packages p ON s.package_id = p.id
+      WHERE s.customer_id = ?
+    ''', [customerId]);
+  }
 }
